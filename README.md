@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg) ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)
 
 **RASR** reconstructs a **512² image from only 3 × 128² captured pixels**
-(~19% of a full scan): **MRIMCNN** learns *where* a capture-limited UAV
+(~19% of a full scan): **IMCNN** learns *where* a capture-limited UAV
 should look next, and **UUDCNN** reconstructs the image around what it
 captured — **+3.4 dB** over spending the same capture budget at random.
 
@@ -47,8 +47,11 @@ stage (b) is the lowest pass repeating the composition at 256 → 512.
 ## Models
 
 Each model lives in its own module under `models/`. The final pipeline uses
-**UUDCNN** for reconstruction and **MRIMCNN** for patch selection — the best
-of each family in the measurements below; the rest are compared against them.
+**UUDCNN** for reconstruction and **IMCNN** for patch selection. UUDCNN is the
+best upscaler in the measurements below. IMCNN is *not* the highest-scoring
+mask — MRIMCNN edges it by 0.04 dB — but it reaches that with 5.5K parameters
+against MRIMCNN's 16.6K, so under a parameter budget IMCNN is the pick. The
+rest are compared against these two.
 
 - **Upscalers** (all net 2x)
   - `TransConv` — single transposed-conv upscaler
@@ -158,7 +161,13 @@ PSNR on the 512² output):
 
 | Pipeline | UUDCNN cascade | + Random | + IMCNN | + MRIMCNN |
 | --- | --- | --- | --- | --- |
-| Avg PSNR (dB) | 27.15 | 28.15 | 31.53 | **31.57** |
+| Avg PSNR (dB) | 27.15 | 28.15 | **31.53** | 31.57 |
+| Mask parameters | — | — | **5.5K** | 16.6K |
+
+**IMCNN is the selected mask.** MRIMCNN is 0.04 dB higher, but spends 3x the
+parameters to get there — inside the measurement spread and not worth the
+cost. The gap that matters is learned vs. random (+3.4 dB), not IMCNN vs.
+MRIMCNN.
 
 Both passes on a COCO val2017 image — the mask spends each pass's budget on
 the detail-heavy regions (face, hat boundary) and skips the flat background.

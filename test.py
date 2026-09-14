@@ -136,7 +136,7 @@ def main():
 
         print(f"[TransConv 128->256] Average PSNR: {_evaluate(image_paths, fn):.4f}")
 
-    # --- Pipeline 2: UUDCNN + MRIMCNN mask blend at 256 (final model) -------
+    # --- Pipeline 2: UUDCNN + MRIMCNN mask blend at 256 (comparison) --------
     if uudcnn is not None and mrimcnn1 is not None:
         def fn(hr):
             hr256 = hr.resize((256, 256), Image.BICUBIC)
@@ -164,7 +164,7 @@ def main():
 
         print(f"[TransConv two-stage 128->256->512] Average PSNR: {_evaluate(image_paths, fn):.4f}")
 
-    # --- Pipeline 4: two-stage UUDCNN + IMCNN 128 -> 256 -> 512 -------------
+    # --- Pipeline 4: two-stage UUDCNN + IMCNN 128 -> 256 -> 512 (final) -----
     if uudcnn is not None and imcnn1 is not None and imcnn2 is not None:
         def fn(hr):
             hr512 = hr.resize((512, 512), Image.BICUBIC)
@@ -181,7 +181,7 @@ def main():
 
         print(f"[UUDCNN + IMCNN two-stage 128->256->512] Average PSNR: {_evaluate(image_paths, fn):.4f}")
 
-    # --- Pipeline 5: two-stage UUDCNN + MRIMCNN 128 -> 256 -> 512 (final) ---
+    # --- Pipeline 5: two-stage UUDCNN + MRIMCNN 128 -> 256 -> 512 (compare) -
     if uudcnn is not None and mrimcnn1 is not None and mrimcnn2 is not None:
         def fn(hr):
             hr512 = hr.resize((512, 512), Image.BICUBIC)
