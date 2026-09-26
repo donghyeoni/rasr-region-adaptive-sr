@@ -1,13 +1,9 @@
-"""TransConv: single transposed-convolution 2x upscaler."""
-
 import torch.nn as nn
 
 from .blocks import ResidualBlock2
 
 
 class TransConv(nn.Module):
-    """Single transposed-convolution upscaler (2x)."""
-
     def __init__(self):
         super().__init__()
 
@@ -16,8 +12,7 @@ class TransConv(nn.Module):
 
         self.resblock = ResidualBlock2(64)
 
-        # ConvTranspose2d upsamples the resolution by 2x
-        self.upconv = nn.ConvTranspose2d(64, 64, kernel_size=4, stride=2, padding=1)  # 128 -> 256
+        self.upconv = nn.ConvTranspose2d(64, 64, kernel_size=4, stride=2, padding=1)
 
         self.conv2 = nn.Conv2d(64, 32, kernel_size=5, padding=2)
         self.relu2 = nn.ReLU(inplace=True)
@@ -25,9 +20,9 @@ class TransConv(nn.Module):
         self.conv3 = nn.Conv2d(32, 3, kernel_size=5, padding=2)
 
     def forward(self, x):
-        x = self.relu1(self.conv1(x))   # 128x128
-        x = self.resblock(x)            # 128x128
-        x = self.relu1(self.upconv(x))  # 256x256
-        x = self.relu2(self.conv2(x))   # 256x256
-        x = self.conv3(x)               # 256x256
+        x = self.relu1(self.conv1(x))
+        x = self.resblock(x)
+        x = self.relu1(self.upconv(x))
+        x = self.relu2(self.conv2(x))
+        x = self.conv3(x)
         return x.clamp(0, 1)

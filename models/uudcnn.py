@@ -1,14 +1,9 @@
-"""UUDCNN: up-up-down 2x upscaler (refines features at 4x before downsampling)."""
-
 import torch.nn as nn
 
 from .blocks import ResidualBlock
 
 
 class UUDCNN(nn.Module):
-    """Up-Up-Down CNN: two transposed-conv upsamples followed by a strided
-    downsample: features are refined at 4x resolution but the net upscaling is 2x."""
-
     def __init__(self):
         super().__init__()
 
@@ -19,10 +14,10 @@ class UUDCNN(nn.Module):
         )
 
         self.upsample = nn.Sequential(
-            nn.ConvTranspose2d(64, 128, kernel_size=4, stride=2, padding=1),  # padding_mode not supported
+            nn.ConvTranspose2d(64, 128, kernel_size=4, stride=2, padding=1),
             nn.ReLU(inplace=True),
 
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # padding_mode not supported
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
             nn.ReLU(inplace=True),
         )
 

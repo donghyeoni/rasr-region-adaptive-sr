@@ -1,20 +1,3 @@
-"""Train a region-selection model (IMCNN / MRIMCNN) on top of a trained upscaler.
-
-The importance mask is trained end-to-end through a **frozen, pretrained
-upscaler** (train one with ``train_upscale.py`` first). The soft mask blends the true
-HR patches into the upscaled image,
-
-    reconstructed = upscaled + (hr - upscaled) * mask
-
-and minimizing MSE(reconstructed, hr) teaches the mask to spend the patch
-budget where the upscaler's error is largest. At evaluation time the mask
-switches to a hard top-K selection (see ``test.py``).
-
-Usage:
-    python train_region.py --data-dir data/COCO/Train --model mrimcnn \\
-        --upscaler uducnn --upscaler-ckpt weights/uducnn.pt
-"""
-
 import argparse
 import os
 
@@ -22,11 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from models import IMCNN, MRIMCNN
-from train_upscale import UPSCALERS, LoadDataset
+from train_upscale import UPSCALERS, LoadDataset, make_loader
 
 SENSING = {
     "imcnn": IMCNN,
@@ -36,13 +18,12 @@ SENSING = {
 
 def train_region(mask_net, upscaler, device, train_loader, optimizer, criterion,
                  num_epochs, scheduler=None):
-    """Train the mask network through the frozen upscaler via soft-mask blending."""
     mask_net.train()
     for epoch in tqdm(range(num_epochs)):
-        epoch_loss = 0.0
+        epoch_loss = torch.zeros((), dtype=torch.float64, device=device)
         for inputs, targets in train_loader:
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+            inputs = inputs.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
 
             with torch.no_grad():
                 upscaled = upscaler(inputs)
@@ -54,16 +35,17 @@ def train_region(mask_net, upscaler, device, train_loader, optimizer, criterion,
             loss.backward()
             optimizer.step()
 
-            epoch_loss += loss.item()
+            epoch_loss += loss.detach().double()
 
-        avg_loss = epoch_loss / len(train_loader)
+        avg_loss = epoch_loss.item() / len(train_loader)
         if scheduler is not None:
             scheduler.step()
         print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.6f}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="Train a region-selection model (IMCNN / MRIMCNN) through a frozen upscaler.")
     parser.add_argument("--data-dir", required=True,
                         help="Folder of high-resolution training images (e.g. COCO)")
     parser.add_argument("--model", default="mrimcnn", choices=sorted(SENSING),
@@ -107,8 +89,7 @@ def main():
             "Point --data-dir at your COCO image folder (see the README)."
         )
 
-    trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True,
-                             num_workers=args.num_workers, drop_last=True)
+    trainloader = make_loader(trainset, args.batch_size, args.num_workers, device)
 
     upscaler = UPSCALERS[args.upscaler]().to(device)
     upscaler.load_state_dict(torch.load(args.upscaler_ckpt, map_location=device,
@@ -117,7 +98,6 @@ def main():
     for p in upscaler.parameters():
         p.requires_grad_(False)
 
-    # the mask net sees the upscaled image, whose side is 2 * lr_size
     mask_net = SENSING[args.model](image_size=2 * args.lr_size,
                                    patch_size=args.patch_size,
                                    temperature=args.temperature).to(device)

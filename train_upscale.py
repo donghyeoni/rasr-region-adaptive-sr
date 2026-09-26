@@ -1,17 +1,3 @@
-"""Train an upscaler (TransConv / UDUCNN / UUDCNN).
-
-Point --data-dir at a folder of high-resolution images (e.g. COCO, see the
-README). Each image is bicubic-resized to ``2 * lr_size`` as the HR target and
-downsampled to ``lr_size`` as the LR input; the models upscale 2x and are
-trained with MSE against the HR target.
-
-To train the region-selection models (IMCNN / MRIMCNN) on top of a trained
-upscaler, use ``train_region.py``.
-
-Usage:
-    python train_upscale.py --data-dir data/COCO/Train --model uducnn
-"""
-
 import argparse
 import glob
 import os
@@ -36,14 +22,6 @@ UPSCALERS = {
 
 
 class LoadDataset(Dataset):
-    """Bicubic LR/HR pairs from a folder of high-resolution images.
-
-    * ``target``: the source image resized (bicubic) to ``2 * lr_size``,
-    * ``input``: the target downsampled to ``lr_size``.
-
-    Both are float32 tensors in ``[0, 1]`` with shape ``(3, H, W)``.
-    """
-
     def __init__(self, img_dir, lr_size=128, max_cache_size=1000):
         self.lr_size = int(lr_size)
         self.hr_size = 2 * int(lr_size)
@@ -58,31 +36,33 @@ class LoadDataset(Dataset):
     def __len__(self):
         return len(self.paths)
 
-    def _load_image(self, path):
-        if path in self._cache:
-            return self._cache[path]
-        img = Image.open(path).convert("RGB")
-        if len(self._cache) < self.max_cache_size:
-            self._cache[path] = img
-        return img
-
     def __getitem__(self, idx):
-        img = self._load_image(self.paths[idx])
-        hr = resize(img, [self.hr_size, self.hr_size],
-                    interpolation=InterpolationMode.BICUBIC)
-        lr = resize(hr, [self.lr_size, self.lr_size],
-                    interpolation=InterpolationMode.BICUBIC)
-        return to_tensor(lr), to_tensor(hr)
+        pair = self._cache.get(idx)
+        if pair is None:
+            img = Image.open(self.paths[idx]).convert("RGB")
+            hr = resize(img, [self.hr_size, self.hr_size],
+                        interpolation=InterpolationMode.BICUBIC)
+            lr = resize(hr, [self.lr_size, self.lr_size],
+                        interpolation=InterpolationMode.BICUBIC)
+            pair = (lr, hr)
+            if len(self._cache) < self.max_cache_size:
+                self._cache[idx] = pair
+        return to_tensor(pair[0]), to_tensor(pair[1])
+
+
+def make_loader(dataset, batch_size, num_workers, device):
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True,
+                      num_workers=num_workers, drop_last=True,
+                      pin_memory=device.type == "cuda")
 
 
 def train(model, device, train_loader, optimizer, criterion, num_epochs, scheduler=None):
-    """Standard supervised training loop."""
     model.train()
     for epoch in tqdm(range(num_epochs)):
-        epoch_loss = 0.0
+        epoch_loss = torch.zeros((), dtype=torch.float64, device=device)
         for inputs, targets in train_loader:
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+            inputs = inputs.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
 
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -91,16 +71,16 @@ def train(model, device, train_loader, optimizer, criterion, num_epochs, schedul
             loss.backward()
             optimizer.step()
 
-            epoch_loss += loss.item()
+            epoch_loss += loss.detach().double()
 
-        avg_loss = epoch_loss / len(train_loader)
+        avg_loss = epoch_loss.item() / len(train_loader)
         if scheduler is not None:
             scheduler.step()
         print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.6f}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Train an upscaler (TransConv / UDUCNN / UUDCNN).")
     parser.add_argument("--data-dir", required=True,
                         help="Folder of high-resolution training images (e.g. COCO)")
     parser.add_argument("--model", default="uudcnn", choices=sorted(UPSCALERS),
@@ -136,8 +116,7 @@ def main():
             "Point --data-dir at your COCO image folder (see the README)."
         )
 
-    trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True,
-                             num_workers=args.num_workers, drop_last=True)
+    trainloader = make_loader(trainset, args.batch_size, args.num_workers, device)
 
     model = UPSCALERS[args.model]().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
