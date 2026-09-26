@@ -2,7 +2,6 @@ import argparse
 import glob
 import os
 
-import matplotlib.pyplot as plt
 import torch
 from PIL import Image
 from torchvision.transforms.functional import to_tensor
@@ -81,8 +80,6 @@ def main():
                         help="Folder of high-resolution test images (e.g. COCO)")
     parser.add_argument("--weights-dir", default="weights",
                         help="Folder containing the trained weight files")
-    parser.add_argument("--viz-image", default=None,
-                        help="Optional image path for a qualitative side-by-side")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -157,29 +154,6 @@ def main():
                     totals[i] += compute_psnr(target, output.squeeze(0).cpu()).item()
         for (label, _), total in zip(pipelines, totals):
             print(f"{label} Average PSNR: {total / len(image_paths):.4f}")
-
-    if args.viz_image and os.path.isfile(args.viz_image) and uudcnn is not None:
-        hr_512 = Image.open(args.viz_image).convert("RGB")
-        hr_256 = hr_512.resize((256, 256), Image.BICUBIC)
-        hr_128 = hr_512.resize((128, 128), Image.BICUBIC)
-        lr_t = to_tensor(hr_128).unsqueeze(0).to(device)
-
-        with torch.no_grad():
-            step1 = uudcnn(lr_t)
-
-        psnr_val = compute_psnr(to_tensor(hr_256), step1.squeeze(0).cpu())
-
-        plt.figure(figsize=(12, 4))
-        plt.subplot(1, 2, 1)
-        plt.imshow(hr_512)
-        plt.title("Original", fontsize=15)
-        plt.axis("off")
-        plt.subplot(1, 2, 2)
-        plt.imshow(step1.squeeze(0).cpu().permute(1, 2, 0))
-        plt.title(f"Output (PSNR: {psnr_val:.2f} dB)", fontsize=15)
-        plt.axis("off")
-        plt.tight_layout()
-        plt.show()
 
 
 if __name__ == "__main__":

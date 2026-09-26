@@ -2,7 +2,6 @@ import argparse
 import glob
 import os
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -98,11 +97,10 @@ def main():
     parser.add_argument("--checkpoint", default=None,
                         help="Output checkpoint path (default: weights/<model>.pt)")
     parser.add_argument("--seed", type=int, default=None,
-                        help="Seed torch/numpy RNG for reproducible training")
+                        help="Seed the torch RNG")
     args = parser.parse_args()
 
     if args.seed is not None:
-        np.random.seed(args.seed)
         torch.manual_seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

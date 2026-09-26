@@ -1,6 +1,4 @@
 torch>=2.2
 torchvision>=0.17
 pillow>=10.2
-numpy>=1.26
-matplotlib>=3.8
 tqdm>=4.66
