@@ -47,9 +47,9 @@ def main():
         description="Train a region-selection model (IMCNN / MRIMCNN) through a frozen upscaler.")
     parser.add_argument("--data-dir", required=True,
                         help="Folder of high-resolution training images (e.g. COCO)")
-    parser.add_argument("--model", default="mrimcnn", choices=sorted(SENSING),
+    parser.add_argument("--model", default="imcnn", choices=sorted(SENSING),
                         help="Region-selection model to train")
-    parser.add_argument("--upscaler", default="uducnn", choices=sorted(UPSCALERS),
+    parser.add_argument("--upscaler", default="uudcnn", choices=sorted(UPSCALERS),
                         help="Frozen upscaler architecture")
     parser.add_argument("--upscaler-ckpt", required=True,
                         help="Pretrained upscaler checkpoint (train with train_upscale.py first)")
